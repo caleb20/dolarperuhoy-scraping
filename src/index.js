@@ -1,3 +1,4 @@
+import 'dotenv/config.js';
 import { runCycle } from './scraper.js';
 
 async function main() {
