@@ -1,48 +1,12 @@
-import { createClient } from '@supabase/supabase-js';
-import pLimit from 'p-limit';
+import { supabase } from './supabase.js';
+import { sleep, extractRate } from './utils.js';
 
 // ================= CONFIG =================
 const timeoutMs = Number(process.env.SCRAPER_REQUEST_TIMEOUT_MS ?? 15000);
 const maxHouses = Number(process.env.SCRAPER_MAX_HOUSES ?? 10);
-const concurrency = Number(process.env.SCRAPER_CONCURRENCY ?? 3);
 
-const limit = pLimit(concurrency);
-
-// ================= SUPABASE =================
-const supabaseUrl =
-  process.env.SCRAPER_SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-
-const supabaseKey =
-  process.env.SCRAPER_SUPABASE_KEY ??
-  process.env.SUPABASE_SERVICE_ROLE_KEY ??
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error('[scraper] Missing Supabase credentials');
-}
-
-const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-  },
-});
-
-// ================= UTIL =================
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-function extractRate(html, label) {
-  const regex = new RegExp(
-    `${label}[^0-9]{0,20}([0-9]+(?:[.,][0-9]{2,4})?)`,
-    'i'
-  );
-
-  const match = html.match(regex);
-  if (!match?.[1]) return null;
-
-  const value = Number(match[1].replace(',', '.'));
-  return Number.isFinite(value) ? value : null;
-}
+// Menos concurrencia en GitHub Actions = más estable
+const concurrency = Number(process.env.SCRAPER_CONCURRENCY ?? 2);
 
 // ================= DATA =================
 async function fetchHousePages() {
@@ -60,8 +24,6 @@ async function fetchHousePages() {
 
 // ================= SCRAPER =================
 async function scrapeWebsite(house) {
-  const start = Date.now();
-
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -86,7 +48,6 @@ async function scrapeWebsite(house) {
       created_at: new Date().toISOString(),
     };
 
-    // guardar en Supabase
     const { error } = await supabase.from('rates').insert([result]);
 
     if (error) {
@@ -106,35 +67,44 @@ async function scrapeWebsite(house) {
   }
 }
 
+// ================= SIMPLE WORKER POOL =================
+async function runWithConcurrency(items, worker, limit) {
+  const results = [];
+  const executing = [];
+
+  for (const item of items) {
+    const p = Promise.resolve().then(() => worker(item));
+    results.push(p);
+
+    if (limit <= items.length) {
+      const e = p.then(() => executing.splice(executing.indexOf(e), 1));
+      executing.push(e);
+
+      if (executing.length >= limit) {
+        await Promise.race(executing);
+      }
+    }
+  }
+
+  return Promise.all(results);
+}
+
 // ================= RUN =================
-async function runCycle() {
+export async function runCycle() {
   console.log(`[scraper] ciclo iniciado: ${new Date().toISOString()}`);
 
   const houses = await fetchHousePages();
 
   console.log(`[scraper] casas: ${houses.length}`);
 
-  // 🧠 control de concurrencia
-  const tasks = houses.map((house) =>
-    limit(async () => {
-      await sleep(1000); // anti-bloqueo
+  await runWithConcurrency(
+    houses,
+    async (house) => {
+      await sleep(500); // 🔥 más rápido que 1000ms en GitHub
       return scrapeWebsite(house);
-    })
+    },
+    concurrency
   );
-
-  await Promise.all(tasks);
 
   console.log('[scraper] ciclo terminado');
 }
-
-// ================= ENTRY POINT =================
-async function main() {
-  try {
-    await runCycle();
-  } catch (err) {
-    console.error('[scraper] fatal error', err.message);
-    process.exit(1);
-  }
-}
-
-main();
