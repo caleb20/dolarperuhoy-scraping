@@ -1,5 +1,7 @@
+import { scrapeWithBrowser } from './browser-scraper.js';
+import { getHouseProfile } from './house-profiles.js';
 import { supabase } from './supabase.js';
-import { sleep, extractRate } from './utils.js';
+import { sleep } from './utils.js';
 
 // ================= CONFIG =================
 const timeoutMs = Number(process.env.SCRAPER_REQUEST_TIMEOUT_MS ?? 15000);
@@ -24,46 +26,63 @@ async function fetchHousePages() {
 
 // ================= SCRAPER =================
 async function scrapeWebsite(house) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const profile = getHouseProfile(house.slug);
 
   try {
-    const res = await fetch(house.website_url, {
-      headers: {
-        'user-agent':
-          'Mozilla/5.0 (compatible; DolarPeruBot/1.0)',
-      },
-      signal: controller.signal,
-    });
+    let buy = null;
+    let sell = null;
 
-    const html = await res.text();
+    if (profile.strategy === 'browser') {
+      ({ buy, sell } = await scrapeWithBrowser(house, profile));
+    } else {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-    const buy = extractRate(html, 'compra');
-    const sell = extractRate(html, 'venta');
+      try {
+        const res = await fetch(house.website_url, {
+          headers: {
+            'user-agent':
+              'Mozilla/5.0 (compatible; DolarPeruBot/1.0)',
+          },
+          signal: controller.signal,
+        });
+
+        const html = await res.text();
+        ({ buy, sell } = profile.extract(html));
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+
+    if (buy == null || sell == null) {
+      console.log(
+        `[NO DATA] ${house.name} | compra=${buy ?? 'n/d'} venta=${sell ?? 'n/d'}`
+      );
+      return null;
+    }
 
     const result = {
       house_id: house.id,
-      compra: buy,
-      venta: sell,
-      created_at: new Date().toISOString(),
+      buy_rate: buy,
+      sell_rate: sell,
+      source_name: profile.sourceName,
+      captured_at: new Date().toISOString(),
     };
 
-    const { error } = await supabase.from('rates').insert([result]);
+    const { error } = await supabase.from('exchange_house_rates').insert([result]);
 
     if (error) {
       console.error(`[DB ERROR] ${house.name}`, error.message);
+    } else {
+      console.log(
+        `[OK] ${house.name} | compra=${buy} venta=${sell}`
+      );
     }
-
-    console.log(
-      `[OK] ${house.name} | compra=${buy ?? 'n/d'} venta=${sell ?? 'n/d'}`
-    );
 
     return result;
   } catch (err) {
     console.error(`[ERROR] ${house.name}`, err.message);
     return null;
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
@@ -97,7 +116,7 @@ export async function runCycle() {
 
   console.log(`[scraper] casas: ${houses.length}`);
 
-  await runWithConcurrency(
+  const results = await runWithConcurrency(
     houses,
     async (house) => {
       await sleep(500); // 🔥 más rápido que 1000ms en GitHub
@@ -107,4 +126,6 @@ export async function runCycle() {
   );
 
   console.log('[scraper] ciclo terminado');
+  
+  return results;
 }
