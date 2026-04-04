@@ -1,15 +1,8 @@
 import puppeteer from 'puppeteer';
+import { extractRateByRegex } from './utils.js';
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function extractByRegex(text, regex) {
-  const match = regex.exec(String(text ?? ''));
-  if (!match?.[1]) return null;
-
-  const value = Number(match[1].replace(',', '.'));
-  return Number.isFinite(value) && value > 0 ? value : null;
 }
 
 export async function scrapeWithBrowser(house, profile) {
@@ -31,14 +24,37 @@ export async function scrapeWithBrowser(house, profile) {
       await sleep(initialDelayMs);
     }
 
+    const dismissSelector = profile.browser?.dismissSelector;
+    if (dismissSelector) {
+      await page.click(dismissSelector).catch(() => {});
+
+      const dismissDelayMs = profile.browser?.dismissDelayMs ?? 0;
+      if (dismissDelayMs > 0) {
+        await sleep(dismissDelayMs);
+      }
+    }
+
     const attempts = profile.browser?.attempts ?? 3;
     const intervalMs = profile.browser?.intervalMs ?? 300;
+    const frameUrlPattern = profile.browser?.frameUrlPattern;
 
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
-      const bodyText = await page.evaluate(() => document.body?.innerText ?? '');
+      let bodyText = await page.evaluate(() => document.body?.innerText ?? '');
 
-      const buy = extractByRegex(bodyText, profile.browser.buyPattern);
-      const sell = extractByRegex(bodyText, profile.browser.sellPattern);
+      if (frameUrlPattern) {
+        const matchingFrame = page
+          .frames()
+          .find((frame) => frame.url().includes(frameUrlPattern));
+
+        if (matchingFrame) {
+          bodyText = await matchingFrame.evaluate(
+            () => document.body?.innerText ?? ''
+          );
+        }
+      }
+
+      const buy = extractRateByRegex(bodyText, profile.browser.buyPattern);
+      const sell = extractRateByRegex(bodyText, profile.browser.sellPattern);
 
       if (buy != null && sell != null) {
         return { buy, sell };

@@ -1,8 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
+import { requireEnv } from './env.js';
 
 export const supabase = createClient(
-  process.env.SCRAPER_SUPABASE_URL,
-  process.env.SCRAPER_SUPABASE_KEY,
+  requireEnv('SCRAPER_SUPABASE_URL'),
+  requireEnv('SCRAPER_SUPABASE_KEY'),
   {
     auth: {
       persistSession: false,

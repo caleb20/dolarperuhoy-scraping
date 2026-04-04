@@ -1,7 +1,8 @@
 import { scrapeWithBrowser } from './browser-scraper.js';
 import { getHouseProfile } from './house-profiles.js';
 import { supabase } from './supabase.js';
-import { sleep } from './utils.js';
+import { normalizeRate, sleep } from './utils.js';
+import './env.js';
 
 // ================= CONFIG =================
 const timeoutMs = Number(process.env.SCRAPER_REQUEST_TIMEOUT_MS ?? 15000);
@@ -32,7 +33,9 @@ async function scrapeWebsite(house) {
     let buy = null;
     let sell = null;
 
-    if (profile.strategy === 'browser') {
+    if (typeof profile.fetchRates === 'function') {
+      ({ buy, sell } = await profile.fetchRates({ house, profile }));
+    } else if (profile.strategy === 'browser') {
       ({ buy, sell } = await scrapeWithBrowser(house, profile));
     } else {
       const controller = new AbortController();
@@ -53,6 +56,9 @@ async function scrapeWebsite(house) {
         clearTimeout(timeout);
       }
     }
+
+    buy = normalizeRate(buy);
+    sell = normalizeRate(sell);
 
     if (buy == null || sell == null) {
       console.log(

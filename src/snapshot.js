@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js';
+import { normalizeRate } from './utils.js';
 
 /**
  * Calcula el promedio de tasas de compra y venta
@@ -10,7 +11,13 @@ function calculateAverageRates(rates) {
     return { buy: null, sell: null };
   }
 
-  const validRates = rates.filter((r) => r.buy_rate != null && r.sell_rate != null);
+  const validRates = rates
+    .map((rate) => ({
+      ...rate,
+      buy_rate: normalizeRate(rate?.buy_rate),
+      sell_rate: normalizeRate(rate?.sell_rate),
+    }))
+    .filter((r) => r.buy_rate != null && r.sell_rate != null);
   if (validRates.length === 0) {
     return { buy: null, sell: null };
   }
@@ -58,9 +65,13 @@ function determineTrend(newBuy, newSell, prevBuy, prevSell) {
  * @param {string} sourceName
  */
 export async function insertSnapshot(rates, sourceName = 'average') {
-  const validRates = (rates ?? []).filter(
-    (r) => r?.buy_rate != null && r?.sell_rate != null
-  );
+  const validRates = (rates ?? [])
+    .map((rate) => ({
+      ...rate,
+      buy_rate: normalizeRate(rate?.buy_rate),
+      sell_rate: normalizeRate(rate?.sell_rate),
+    }))
+    .filter((r) => r?.buy_rate != null && r?.sell_rate != null);
   const { buy, sell } = calculateAverageRates(rates);
 
   if (buy == null || sell == null) {

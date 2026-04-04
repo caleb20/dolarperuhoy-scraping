@@ -1,4 +1,4 @@
-import 'dotenv/config.js';
+import './env.js';
 import { runCycle } from './scraper.js';
 import { insertSnapshot } from './snapshot.js';
 import { fetchAndInsertSunat } from './sunat_fetch.js';
