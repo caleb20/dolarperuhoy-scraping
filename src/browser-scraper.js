@@ -22,9 +22,14 @@ export async function scrapeWithBrowser(house, profile) {
     const page = await browser.newPage();
 
     await page.goto(house.website_url, {
-      waitUntil: 'domcontentloaded',
+      waitUntil: profile.browser?.waitUntil ?? 'domcontentloaded',
       timeout: profile.browser?.timeoutMs ?? 30000,
     });
+
+    const initialDelayMs = profile.browser?.initialDelayMs ?? 0;
+    if (initialDelayMs > 0) {
+      await sleep(initialDelayMs);
+    }
 
     const attempts = profile.browser?.attempts ?? 3;
     const intervalMs = profile.browser?.intervalMs ?? 300;
