@@ -3,7 +3,7 @@ export function sleep(ms) {
 }
 
 const MIN_EXCHANGE_RATE = 2.5;
-const MAX_EXCHANGE_RATE = 5;
+const MAX_EXCHANGE_RATE = 4;
 
 export function normalizeRate(value) {
   const parsedValue = typeof value === 'number'
@@ -22,7 +22,7 @@ export function normalizeRate(value) {
 }
 
 export function extractRateByRegex(input, regex) {
-  const match = String(input ?? '').match(regex);
+  const match = regex.exec(String(input ?? ''));
   if (!match?.[1]) return null;
 
   return normalizeRate(match[1]);

@@ -6,7 +6,6 @@ import './env.js';
 
 // ================= CONFIG =================
 const timeoutMs = Number(process.env.SCRAPER_REQUEST_TIMEOUT_MS ?? 15000);
-const maxHouses = Number(process.env.SCRAPER_MAX_HOUSES ?? 10);
 
 // Menos concurrencia en GitHub Actions = más estable
 const concurrency = Number(process.env.SCRAPER_CONCURRENCY ?? 2);
@@ -17,8 +16,7 @@ async function fetchHousePages() {
     .from('exchange_houses')
     .select('id, slug, name, website_url')
     .eq('is_active', true)
-    .not('website_url', 'is', null)
-    .limit(maxHouses);
+    .not('website_url', 'is', null);
 
   if (error) throw new Error(error.message);
 
