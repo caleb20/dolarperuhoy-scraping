@@ -160,14 +160,18 @@ const houseProfiles = {
     sourceName: 'browser',
     browser: {
       buyPatterns: [
+        /VENDE\s+D[ÓO]LARES[^\d]{0,40}S\/?\.?\s*([\d.]+)/i,
         /Compra[:\s]*S\/?\.?\s*([\d.]+)/i,
         /COMPRA[:\s]*S\/?\.?\s*([\d.]+)/i,
+        /COMPRA\s+D[ÓO]LARES[^\d]{0,40}S\/?\.?\s*([\d.]+)/i,
         /Compramos[:\s]*S\/?\.?\s*([\d.]+)/i,
         /TE\s+COMPRAMOS[:\s]*([\d.]+)/i,
       ],
       sellPatterns: [
+        /COMPRA\s+D[ÓO]LARES[^\d]{0,40}S\/?\.?\s*([\d.]+)/i,
         /Venta[:\s]*S\/?\.?\s*([\d.]+)/i,
         /VENTA[:\s]*S\/?\.?\s*([\d.]+)/i,
+        /VENDE\s+D[ÓO]LARES[^\d]{0,40}S\/?\.?\s*([\d.]+)/i,
         /Vendemos[:\s]*S\/?\.?\s*([\d.]+)/i,
         /TE\s+VENDEMOS[:\s]*([\d.]+)/i,
       ],
@@ -194,8 +198,8 @@ const houseProfiles = {
     strategy: 'browser',
     sourceName: 'browser',
     browser: {
-      buyPattern: /Compra:?\s+[Ss]\/\s*([\d.]+)/i,
-      sellPattern: /Venta:?\s+[Ss]\/\s*([\d.]+)/i,
+      buyPattern: /Compra:?\s+s\/\s*([\d.]+)/i,
+      sellPattern: /Venta:?\s+s\/\s*([\d.]+)/i,
       waitUntil: 'networkidle2',
       initialDelayMs: 3000,
       attempts: 3,
