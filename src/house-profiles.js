@@ -91,6 +91,72 @@ async function fetchInkamoneyRates() {
   };
 }
 
+async function fetchMoneyhouseRates() {
+  const res = await fetch('https://moneyhouse.pe', {
+    headers: { 'user-agent': 'Mozilla/5.0 (compatible; DolarPeruBot/1.0)' },
+    signal: AbortSignal.timeout(15000),
+  });
+  const html = await res.text();
+  const buyMatch = html.match(/field-t-c-compra[^]*?cantant">([\d.]+)<[/]span>/i);
+  const sellMatch = html.match(/field-t-c-venta[^]*?cantant">([\d.]+)<[/]span>/i);
+  return {
+    buy: normalizeRate(buyMatch?.[1]),
+    sell: normalizeRate(sellMatch?.[1]),
+  };
+}
+
+async function fetchCambiafxRates() {
+  const res = await fetch('https://apiluna.cambiafx.pe/api/BackendPizarra/getTcCustomerNoAuth?idParCurrency=1', {
+    headers: {
+      accept: 'application/json',
+      'user-agent': 'Mozilla/5.0 (compatible; DolarPeruBot/1.0)',
+    },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`CambiaFX API ${res.status}`);
+  const data = await res.json();
+  if (!Array.isArray(data) || data.length === 0) throw new Error('CambiaFX API sin datos');
+  return {
+    buy: normalizeRate(data[0].tcBuy),
+    sell: normalizeRate(data[0].tcSale),
+  };
+}
+
+async function fetchCambiomundialRates() {
+  const res = await fetch('https://www.cambiomundial.com/backend/tasaCambio/daily', {
+    headers: {
+      accept: 'application/json',
+      'user-agent': 'Mozilla/5.0 (compatible; DolarPeruBot/1.0)',
+    },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`CambioMundial API ${res.status}`);
+  const data = await res.json();
+  if (!Array.isArray(data) || data.length === 0) throw new Error('CambioMundial API sin datos');
+  const regular = data.find(r => r.tipoTasa === 'REGULAR') ?? data[0];
+  return {
+    buy: normalizeRate(regular.buy),
+    sell: normalizeRate(regular.sell),
+  };
+}
+
+async function fetchKambioRates() {
+  const res = await fetch('https://kambio.com.pe/api/rates/current', {
+    headers: {
+      accept: 'application/json',
+      'user-agent': 'Mozilla/5.0 (compatible; DolarPeruBot/1.0)',
+    },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`Kambio API ${res.status}`);
+  const data = await res.json();
+  if (!data || data.buy == null || data.sell == null) throw new Error('Kambio API sin datos');
+  return {
+    buy: normalizeRate(data.buy),
+    sell: normalizeRate(data.sell),
+  };
+}
+
 const houseProfiles = {
   cambiosmass: {
     strategy: 'custom',
@@ -241,6 +307,26 @@ const houseProfiles = {
       intervalMs: 500,
       timeoutMs: 60000,
     },
+  },
+  moneyhouse: {
+    strategy: 'custom',
+    sourceName: 'api',
+    fetchRates: fetchMoneyhouseRates,
+  },
+  cambiafx: {
+    strategy: 'custom',
+    sourceName: 'api',
+    fetchRates: fetchCambiafxRates,
+  },
+  cambiomundial: {
+    strategy: 'custom',
+    sourceName: 'api',
+    fetchRates: fetchCambiomundialRates,
+  },
+  kambio: {
+    strategy: 'custom',
+    sourceName: 'api',
+    fetchRates: fetchKambioRates,
   },
 };
 
