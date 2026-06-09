@@ -123,16 +123,38 @@ async function fetchCambiafxRates() {
 }
 
 async function fetchCambiomundialRates() {
-  const res = await fetch('https://www.cambiomundial.com/backend/tasaCambio/daily', {
+  const browserHeaders = {
+    accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'accept-encoding': 'gzip, deflate, br',
+    'accept-language': 'es-PE,es;q=0.9,en;q=0.8',
+    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  };
+
+  const cookieJar = [];
+
+  const homeRes = await fetch('https://www.cambiomundial.com/', {
+    headers: browserHeaders,
+    redirect: 'follow',
+    signal: AbortSignal.timeout(15000),
+  });
+
+  const setCookie = homeRes.headers.get('set-cookie');
+  if (setCookie) {
+    cookieJar.push(setCookie.split(';')[0]);
+  }
+
+  const apiRes = await fetch('https://www.cambiomundial.com/backend/tasaCambio/daily', {
     headers: {
       accept: 'application/json',
       referer: 'https://www.cambiomundial.com/',
-      'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'user-agent': browserHeaders['user-agent'],
+      cookie: cookieJar.join('; '),
     },
     signal: AbortSignal.timeout(15000),
   });
-  if (!res.ok) throw new Error(`CambioMundial API ${res.status}`);
-  const data = await res.json();
+
+  if (!apiRes.ok) throw new Error(`CambioMundial API ${apiRes.status}`);
+  const data = await apiRes.json();
   if (!Array.isArray(data) || data.length === 0) throw new Error('CambioMundial API sin datos');
   const regular = data.find(r => r.tipoTasa === 'REGULAR') ?? data[0];
   return {
