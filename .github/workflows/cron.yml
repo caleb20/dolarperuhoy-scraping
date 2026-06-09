@@ -23,8 +23,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Chrome for Puppeteer
-        run: npx puppeteer install chrome
+      - name: Install Chromium for Puppeteer
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium-browser libnss3 libatk-bridge2.0-0 libdrm2 libgbm1 libasound2 libxkbcommon0
+
+      - name: Set Puppeteer Chrome path
+        run: echo "PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser" >> $GITHUB_ENV
 
       - name: Run scraper
         run: npm start
@@ -33,4 +38,5 @@ jobs:
           SCRAPER_SUPABASE_KEY: ${{ secrets.SCRAPER_SUPABASE_KEY }}
           SCRAPER_REQUEST_TIMEOUT_MS: 15000
           SCRAPER_MAX_HOUSES: 10
-          SCRAPER_CONCURRENCY: 2
+          SCRAPER_CONCURRENCY: 3
+          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: true

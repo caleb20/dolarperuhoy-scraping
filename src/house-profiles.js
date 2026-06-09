@@ -64,19 +64,38 @@ const defaultProfile = {
   extract: defaultExtractor,
 };
 
+async function fetchCambiosmassRates() {
+  const res = await fetch('https://cambiosmass.com', {
+    headers: { 'user-agent': 'Mozilla/5.0 (compatible; DolarPeruBot/1.0)' },
+    signal: AbortSignal.timeout(15000),
+  });
+  const html = await res.text();
+  const m = html.match(/compra:([\d.]+),venta:([\d.]+)/);
+  return {
+    buy: normalizeRate(m?.[1]),
+    sell: normalizeRate(m?.[2]),
+  };
+}
+
+async function fetchInkamoneyRates() {
+  const res = await fetch('https://inkamoney.com', {
+    headers: { 'user-agent': 'Mozilla/5.0 (compatible; DolarPeruBot/1.0)' },
+    signal: AbortSignal.timeout(15000),
+  });
+  const html = await res.text();
+  const buyMatch = html.match(/buy-price="(3\.\d+)"/);
+  const sellMatch = html.match(/sale-price="(3\.\d+)"/);
+  return {
+    buy: normalizeRate(buyMatch?.[1]),
+    sell: normalizeRate(sellMatch?.[1]),
+  };
+}
+
 const houseProfiles = {
   cambiosmass: {
-    strategy: 'browser',
-    sourceName: 'browser',
-    browser: {
-      buyPattern: /Quiero\s+Vender\s+S\/\s*([\d.]+)/i,
-      sellPattern: /Quiero\s+Comprar\s+S\/\s*([\d.]+)/i,
-      waitUntil: 'networkidle2',
-      initialDelayMs: 3000,
-      attempts: 3,
-      intervalMs: 500,
-      timeoutMs: 60000,
-    },
+    strategy: 'custom',
+    sourceName: 'api',
+    fetchRates: fetchCambiosmassRates,
   },
   dollarhouse: {
     strategy: 'browser',
@@ -156,32 +175,9 @@ const houseProfiles = {
     fetchRates: fetchJetPeruRates,
   },
   inkamoney: {
-    strategy: 'browser',
-    sourceName: 'browser',
-    browser: {
-      buyPatterns: [
-        /VENDE\s+D[ÓO]LARES[^\d]{0,40}S\/?\.?\s*([\d.]+)/i,
-        /Compra[:\s]*S\/?\.?\s*([\d.]+)/i,
-        /COMPRA[:\s]*S\/?\.?\s*([\d.]+)/i,
-        /COMPRA\s+D[ÓO]LARES[^\d]{0,40}S\/?\.?\s*([\d.]+)/i,
-        /Compramos[:\s]*S\/?\.?\s*([\d.]+)/i,
-        /TE\s+COMPRAMOS[:\s]*([\d.]+)/i,
-      ],
-      sellPatterns: [
-        /COMPRA\s+D[ÓO]LARES[^\d]{0,40}S\/?\.?\s*([\d.]+)/i,
-        /Venta[:\s]*S\/?\.?\s*([\d.]+)/i,
-        /VENTA[:\s]*S\/?\.?\s*([\d.]+)/i,
-        /VENDE\s+D[ÓO]LARES[^\d]{0,40}S\/?\.?\s*([\d.]+)/i,
-        /Vendemos[:\s]*S\/?\.?\s*([\d.]+)/i,
-        /TE\s+VENDEMOS[:\s]*([\d.]+)/i,
-      ],
-      waitUntil: 'networkidle2',
-      initialDelayMs: 4000,
-      attempts: 4,
-      intervalMs: 500,
-      timeoutMs: 60000,
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    },
+    strategy: 'custom',
+    sourceName: 'api',
+    fetchRates: fetchInkamoneyRates,
   },
   kambista: {
     strategy: 'browser',
