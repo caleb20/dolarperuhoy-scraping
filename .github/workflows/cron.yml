@@ -23,13 +23,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Chromium for Puppeteer
+      - name: Install Google Chrome for Puppeteer
         run: |
-          sudo apt-get update
-          sudo apt-get install -y chromium-browser libnss3 libatk-bridge2.0-0 libdrm2 libgbm1 libasound2 libxkbcommon0
-
-      - name: Set Puppeteer Chrome path
-        run: echo "PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser" >> $GITHUB_ENV
+          wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo dpkg -i /tmp/chrome.deb 2>/dev/null || sudo apt-get -fy install -qq
+          echo "PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable" >> $GITHUB_ENV
 
       - name: Run scraper
         run: npm start
