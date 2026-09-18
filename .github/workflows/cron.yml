@@ -2,8 +2,12 @@ name: Scraper Cron
 
 on:
   schedule:
-    - cron: "*/5 * * * *" # cada 15 minutos
+    - cron: "*/5 * * * *" # cada 5 minutos
   workflow_dispatch: # ejecución manual
+
+concurrency:
+  group: scraper-cron
+  cancel-in-progress: false
 
 jobs:
   run-scraper:

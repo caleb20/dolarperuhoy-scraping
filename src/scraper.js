@@ -1,7 +1,7 @@
 import { scrapeWithBrowser } from './browser-scraper.js';
 import { getHouseProfile } from './house-profiles.js';
 import { supabase } from './supabase.js';
-import { normalizeRate, sleep } from './utils.js';
+import { normalizeRate, sleep, withRetry } from './utils.js';
 import './env.js';
 
 // ================= CONFIG =================
@@ -12,15 +12,20 @@ const concurrency = Number(process.env.SCRAPER_CONCURRENCY ?? 2);
 
 // ================= DATA =================
 async function fetchHousePages() {
-  const { data, error } = await supabase
-    .from('exchange_houses')
-    .select('id, slug, name, website_url')
-    .eq('is_active', true)
-    .not('website_url', 'is', null);
+  return withRetry(
+    async () => {
+      const { data, error } = await supabase
+        .from('exchange_houses')
+        .select('id, slug, name, website_url')
+        .eq('is_active', true)
+        .not('website_url', 'is', null);
 
-  if (error) throw new Error(error.message);
+      if (error) throw new Error(error.message);
 
-  return data ?? [];
+      return data ?? [];
+    },
+    { retries: 4, baseDelayMs: 3000, label: 'fetchHousePages (Supabase)' }
+  );
 }
 
 // ================= SCRAPER =================
