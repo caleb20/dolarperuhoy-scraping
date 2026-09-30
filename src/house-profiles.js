@@ -1,4 +1,4 @@
-import { extractRate, normalizeRate } from './utils.js';
+import { extractRate, normalizeRate, withRetry } from './utils.js';
 
 function defaultExtractor(html) {
   return {
@@ -122,45 +122,39 @@ async function fetchCambiafxRates() {
   };
 }
 
+// Antes esto primero visitaba la home para sacar una cookie de sesion y se la mandaba a
+// la API. Comprobado en vivo (30-sep-2026): la API responde 200 con datos correctos SIN
+// ninguna cookie -- no la necesita. Esa cookie ademas se extraia mal: Headers.get(
+// 'set-cookie') en fetch/undici junta varios Set-Cookie en un solo string separado por
+// comas, lo que puede partir un valor de cookie real a la mitad y mandar un header
+// invalido. Sospecha (no confirmada, no hay logs del cron a mano): eso, sumado a que la
+// llamada corre desde IPs de GitHub Actions detras de un WAF de Cloudflare, explicaria por
+// que casi siempre fallaba (solo 1 fila insertada en todo septiembre). Quitamos el paso de
+// la cookie por completo -- es el que probamos que sobra -- y le sumamos reintentos por si
+// el bloqueo es intermitente.
 async function fetchCambiomundialRates() {
-  const browserHeaders = {
-    accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'accept-encoding': 'gzip, deflate, br',
-    'accept-language': 'es-PE,es;q=0.9,en;q=0.8',
-    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  };
+  return withRetry(
+    async () => {
+      const apiRes = await fetch('https://www.cambiomundial.com/backend/tasaCambio/daily', {
+        headers: {
+          accept: 'application/json',
+          referer: 'https://www.cambiomundial.com/',
+          'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+        signal: AbortSignal.timeout(15000),
+      });
 
-  const cookieJar = [];
-
-  const homeRes = await fetch('https://www.cambiomundial.com/', {
-    headers: browserHeaders,
-    redirect: 'follow',
-    signal: AbortSignal.timeout(15000),
-  });
-
-  const setCookie = homeRes.headers.get('set-cookie');
-  if (setCookie) {
-    cookieJar.push(setCookie.split(';')[0]);
-  }
-
-  const apiRes = await fetch('https://www.cambiomundial.com/backend/tasaCambio/daily', {
-    headers: {
-      accept: 'application/json',
-      referer: 'https://www.cambiomundial.com/',
-      'user-agent': browserHeaders['user-agent'],
-      cookie: cookieJar.join('; '),
+      if (!apiRes.ok) throw new Error(`CambioMundial API ${apiRes.status}`);
+      const data = await apiRes.json();
+      if (!Array.isArray(data) || data.length === 0) throw new Error('CambioMundial API sin datos');
+      const regular = data.find((r) => r.tipoTasa === 'REGULAR') ?? data[0];
+      return {
+        buy: normalizeRate(regular.buy),
+        sell: normalizeRate(regular.sell),
+      };
     },
-    signal: AbortSignal.timeout(15000),
-  });
-
-  if (!apiRes.ok) throw new Error(`CambioMundial API ${apiRes.status}`);
-  const data = await apiRes.json();
-  if (!Array.isArray(data) || data.length === 0) throw new Error('CambioMundial API sin datos');
-  const regular = data.find(r => r.tipoTasa === 'REGULAR') ?? data[0];
-  return {
-    buy: normalizeRate(regular.buy),
-    sell: normalizeRate(regular.sell),
-  };
+    { retries: 3, baseDelayMs: 2000, label: 'CambioMundial' }
+  );
 }
 
 async function fetchKambioRates() {
