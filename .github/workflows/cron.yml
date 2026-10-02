@@ -14,6 +14,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      # Antes esto solo estaba en el paso "Run scraper", asi que "npm ci" SI descargaba el
+      # Chromium que trae empaquetado el paquete "puppeteer" (no puppeteer-core) -- un
+      # segundo navegador completo, redundante con el Chrome que se instala manualmente dos
+      # pasos mas abajo. Puesto a nivel de job para que aplique tambien a "npm ci".
+      PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: true
 
     steps:
       - name: Checkout repo
@@ -23,13 +28,33 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
 
+      # La semana del año se calcula ANTES del paso de cache, porque la key de
+      # actions/cache se evalua al empezar ese paso -- calcularla despues (como en un
+      # intento anterior de este mismo archivo) nunca aplicaria la rotacion semanal.
+      - name: Set cache week
+        run: echo "CACHE_WEEK=$(date +%Y-%U)" >> $GITHUB_ENV
+
+      # Cachea el .deb de Chrome para no volver a bajarlo (~100+ MB) en cada corrida. La
+      # clave rota cada semana para igual recibir actualizaciones de Chrome con cierta
+      # frecuencia, sin perder el cache en cada ejecucion.
+      - name: Cache Google Chrome .deb
+        id: cache-chrome-deb
+        uses: actions/cache@v4
+        with:
+          path: /tmp/chrome.deb
+          key: chrome-stable-deb-${{ runner.os }}-week-${{ env.CACHE_WEEK }}
+
+      - name: Download Google Chrome (if not cached)
+        if: steps.cache-chrome-deb.outputs.cache-hit != 'true'
+        run: wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+
       - name: Install Google Chrome for Puppeteer
         run: |
-          wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo dpkg -i /tmp/chrome.deb 2>/dev/null || sudo apt-get -fy install -qq
           echo "PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable" >> $GITHUB_ENV
 
@@ -41,4 +66,3 @@ jobs:
           SCRAPER_REQUEST_TIMEOUT_MS: 15000
           SCRAPER_MAX_HOUSES: 10
           SCRAPER_CONCURRENCY: 3
-          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: true
